@@ -2239,6 +2239,7 @@ dependencies = [
 name = "snake_game"
 version = "0.1.0"
 dependencies = [
+ "fastrand",
  "ggez",
 ]
 
