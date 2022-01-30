@@ -5,13 +5,25 @@ use ggez::event;
 use ggez::graphics;
 use ggez::graphics::{Color, DrawParam};
 use std::collections::LinkedList;
+use  ggez::input::keyboard::*;
 
+enum Direction {
+    Up,
+    Down,
+    Left,
+    Right,
+}
 
+enum Eat {
+    Full,
+    Hungry
+}
 
 struct Apple {
     color: Color,
     width: i32,
-    height: i32
+    height: i32,
+    pos: (i32, i32)
 }
 
 struct Part {
@@ -20,7 +32,8 @@ struct Part {
 }
 
 struct Snake {
-    parts: LinkedList<Part>
+    parts: LinkedList<Part>,
+    direction: Direction
 }
 
 impl Snake {
@@ -30,22 +43,16 @@ impl Snake {
         parts.push_back(root_part);
 
         Self {
-            parts: parts
+            parts: parts,
+            direction: Direction::Left
         }
     }
 
     fn draw(&mut self,ctx: &mut Context) {
-        let mut first: bool = false;
         for i  in &self.parts {
             let part_rect = graphics::Rect::new_i32(i.x, i.y, 20, 20);
-            let part;
-            if !first {
-                part = graphics::Mesh::new_rectangle(ctx, graphics::DrawMode::fill(), part_rect, Color::RED).unwrap();
-                first = true;
-            }else {
-                part = graphics::Mesh::new_rectangle(ctx, graphics::DrawMode::fill(), part_rect, Color::WHITE).unwrap();
-            }
-            
+            let part = graphics::Mesh::new_rectangle(ctx, graphics::DrawMode::fill(), part_rect, Color::WHITE).unwrap();
+
 
             if let Err(t) = graphics::draw(ctx, &part, DrawParam::default()) {
                 println!("{:?}", t);
@@ -53,10 +60,51 @@ impl Snake {
         }
     }
 
-    fn add_part(&mut self) {
-        let last_part: &Part = self.parts.back().unwrap();
+    fn add_part(&mut self)  {
+        let head_part: &Part = self.parts.back().unwrap();
 
-        self.parts.push_back(Part {x: last_part.x + 20, y: last_part.y});
+
+        match self.direction {
+            Direction::Left => {
+                self.parts.push_back(Part {x: head_part.x - 10, y: head_part.y});
+            },
+            Direction::Right => {
+                self.parts.push_back(Part {x: head_part.x + 10, y: head_part.y});
+            },
+            Direction::Up => {
+                self.parts.push_back(Part {x: head_part.x, y: head_part.y - 10});
+            },
+            Direction::Down => {
+                self.parts.push_back(Part {x: head_part.x, y: head_part.y + 10});
+            }
+        }
+
+
+    }
+
+    fn move_snake(&mut self) {
+
+        //head of the snake
+        let mut head: &mut Part = self.parts.front_mut().unwrap();
+
+        let new_block = match self.direction {
+            Direction::Up => {
+                Part { x: head.x, y: head.y - 10}
+            },
+            Direction::Down => {
+                Part { x: head.x, y: head.y + 10}
+            },
+            Direction::Right => {
+                Part { x: head.x + 10, y: head.y }
+            }
+            ,Direction::Left => {
+                Part { x: head.x - 10, y: head.y}
+            }
+        };
+
+        self.parts.push_front(new_block);
+        self.parts.pop_back();
+        
     }
 }
 
@@ -66,7 +114,8 @@ impl Apple {
         Self {
             color: Color::from_rgb(0,200,0),
             width: 20,
-            height: 20
+            height: 20,
+            pos: (100, 100)
         }
     }
 
@@ -74,29 +123,40 @@ impl Apple {
         Self {
             color: Color::from_rgb(r,g,b),
             width: size,
-            height: size
+            height: size,
+            pos: (100, 100)
         }
     }
 
-    fn random_location(ctx: &mut Context) -> (i32, i32) {
+    fn random_location(&mut self, ctx: &mut Context) -> (i32, i32) {
         let (window_x, window_y) = graphics::size(ctx);
-        let x = fastrand::i32(0..window_x as i32);
-        let y = fastrand::i32(0..window_y as i32);
+        let x = fastrand::i32(0..window_x as i32 - 100);
+        let y = fastrand::i32(0..window_y as i32 - 100);
+        self.pos.0 = x;
+        self.pos.1 = y;
 
         (x, y)
+    }
+
+    fn get_location(&self) -> (i32, i32) {
+        (self.pos.0, self.pos.1)
     }
 }
 
 struct State {
 	score: u64,
-    snake: Snake
+    snake: Snake,
+    apple: Apple,
+    eat: Eat,
 }
 
 impl State {
     fn new() -> Self {
         Self {
             score: 0,
-            snake: Snake::new()
+            snake: Snake::new(),
+            apple: Apple::new(),
+            eat: Eat::Hungry
         }
     }
 
@@ -104,27 +164,86 @@ impl State {
 
 impl EventHandler for State {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
-        self.snake.add_part();
+
+        //check for apple
+        if ((self.apple.pos.0 <= self.snake.parts.front().unwrap().x && self.apple.pos.0 + 21 >= self.snake.parts.front().unwrap().x) && (self.apple.pos.1 <= self.snake.parts.front().unwrap().y && self.apple.pos.1 + 21 >= self.snake.parts.front().unwrap().y)) {
+            self.snake.add_part();
+            self.eat = Eat::Hungry;
+        }  
+        
+        self.snake.move_snake();
         Ok(())
     }
 
     fn draw(&mut self, ctx: &mut Context) -> GameResult {
         graphics::clear(ctx, Color::from_rgb(0,0,128));
-        //make snake 
 
         //make apple
-        let apple_data: Apple =  Apple::new();
-        let (apple_x,  apple_y) = Apple::random_location(ctx);
-        let apple_rect = graphics::Rect::new_i32(apple_x, apple_y, apple_data.width, apple_data.height);
-        let apple = graphics::Mesh::new_rectangle(ctx, graphics::DrawMode::fill(), apple_rect, apple_data.color).unwrap();
+        let apple_data: &mut Apple = &mut self.apple;
 
-        self.snake.draw(ctx);
 
-        if let Err(t) = graphics::draw(ctx, &apple, DrawParam::default()) {
-            println!("{:?}", t);
+        if let Eat::Hungry = self.eat {
+            let (apple_x,  apple_y) = apple_data.random_location(ctx);
+            let apple_rect = graphics::Rect::new_i32(apple_x, apple_y, apple_data.width, apple_data.height);
+            let apple = graphics::Mesh::new_rectangle(ctx, graphics::DrawMode::fill(), apple_rect, apple_data.color).unwrap();
+
+            if let Err(t) = graphics::draw(ctx, &apple, DrawParam::default()) {
+                println!("{:?}", t);
+            }
+
+            self.eat = Eat::Full;
+        }else {
+            let (apple_x,  apple_y) = apple_data.get_location();
+            let apple_rect = graphics::Rect::new_i32(apple_x, apple_y, apple_data.width, apple_data.height);
+            let apple = graphics::Mesh::new_rectangle(ctx, graphics::DrawMode::fill(), apple_rect, apple_data.color).unwrap();
+
+            if let Err(t) = graphics::draw(ctx, &apple, DrawParam::default()) {
+                println!("{:?}", t);
+            }
         }
 
+
+        //snake
+        self.snake.draw(ctx);
+
+
         graphics::present(ctx)
+    }
+
+    fn key_down_event(&mut self,ctx: &mut Context, keycode: KeyCode, keymods: KeyMods, repeat: bool) {
+        match keycode {
+            KeyCode::W => {
+                if let Direction::Down = self.snake.direction {
+                    self.snake.direction = Direction::Down;
+                }else {
+                    self.snake.direction = Direction::Up;
+                }
+            },
+            KeyCode::S => {
+                if let Direction::Up = self.snake.direction {
+                    self.snake.direction = Direction::Up;
+                }else {
+                    self.snake.direction = Direction::Down;
+                }
+            },
+            KeyCode::A => {
+                if let Direction::Right = self.snake.direction {
+                    self.snake.direction = Direction::Right;
+                }else {
+                    self.snake.direction = Direction::Left;
+                }
+            },
+            KeyCode::D => {
+                if let Direction::Left = self.snake.direction {
+                    self.snake.direction = Direction::Left;
+                }else {
+                    self.snake.direction = Direction::Right;
+                }
+            },
+            _ => {
+
+            }
+        }
     }
 }
 
