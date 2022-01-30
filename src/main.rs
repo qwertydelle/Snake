@@ -5,7 +5,7 @@ use ggez::event;
 use ggez::graphics;
 use ggez::graphics::{Color, DrawParam};
 use std::collections::LinkedList;
-use  ggez::input::keyboard::*;
+use ggez::input::keyboard::*;
 
 enum Direction {
     Up,
@@ -166,8 +166,9 @@ impl EventHandler for State {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
 
         //check for apple
-        if ((self.apple.pos.0 <= self.snake.parts.front().unwrap().x && self.apple.pos.0 + 21 >= self.snake.parts.front().unwrap().x) && (self.apple.pos.1 <= self.snake.parts.front().unwrap().y && self.apple.pos.1 + 21 >= self.snake.parts.front().unwrap().y)) {
+        if ((self.apple.pos.0 - 30 < self.snake.parts.front().unwrap().x && self.apple.pos.0 + 30 >= self.snake.parts.front().unwrap().x) && (self.apple.pos.1 - 30 < self.snake.parts.front().unwrap().y && self.apple.pos.1 + 30 >= self.snake.parts.front().unwrap().y)) {
             self.snake.add_part();
+            self.score += 1;
             self.eat = Eat::Hungry;
         }  
         
@@ -180,6 +181,8 @@ impl EventHandler for State {
 
         //make apple
         let apple_data: &mut Apple = &mut self.apple;
+
+        let text =  graphics::Text::new(format!("score: {}", self.score));
 
 
         if let Eat::Hungry = self.eat {
@@ -201,6 +204,8 @@ impl EventHandler for State {
                 println!("{:?}", t);
             }
         }
+
+        graphics::draw(ctx, &text, DrawParam::default());
 
 
         //snake
