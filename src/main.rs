@@ -6,6 +6,7 @@ use ggez::graphics;
 use ggez::graphics::{Color, DrawParam};
 use std::collections::LinkedList;
 use ggez::input::keyboard::*;
+use ggez::mint;
 
 enum Direction {
     Up,
@@ -106,6 +107,30 @@ impl Snake {
         self.parts.pop_back();
         
     }
+
+    fn self_collide(&mut self, score: &mut u32, highscore: &mut u32) {
+        let mut index = 0;
+        let mut collided: bool = false;
+        let head: &Part = self.parts.front().unwrap();
+
+        for i  in &self.parts {
+            if index > 0 {
+                if head.x == i.x && head.y == i.y {
+                    collided = true;
+                }
+            }
+            index += 1;
+        }
+
+        if collided {
+            if *score > *highscore {
+                *highscore = *score;
+            }
+            
+            *score = 0;
+            self.parts.split_off(1);
+        }
+    }
 }
 
 impl Apple {
@@ -144,7 +169,8 @@ impl Apple {
 }
 
 struct State {
-	score: u64,
+	score: u32,
+    high_score: u32,
     snake: Snake,
     apple: Apple,
     eat: Eat,
@@ -156,7 +182,8 @@ impl State {
             score: 0,
             snake: Snake::new(),
             apple: Apple::new(),
-            eat: Eat::Hungry
+            eat: Eat::Hungry,
+            high_score: 0,
         }
     }
 
@@ -164,15 +191,33 @@ impl State {
 
 impl EventHandler for State {
     fn update(&mut self, ctx: &mut Context) -> GameResult {
+        let (window_x, window_y) = graphics::size(ctx);
+
 
         //check for apple
         if ((self.apple.pos.0 - 30 < self.snake.parts.front().unwrap().x && self.apple.pos.0 + 30 >= self.snake.parts.front().unwrap().x) && (self.apple.pos.1 - 30 < self.snake.parts.front().unwrap().y && self.apple.pos.1 + 30 >= self.snake.parts.front().unwrap().y)) {
             self.snake.add_part();
             self.score += 1;
             self.eat = Eat::Hungry;
-        }  
+        } 
+
+
+        //x checks
+        if(self.snake.parts.front().unwrap().x > window_x as i32) {
+            self.snake.parts.front_mut().unwrap().x = 0;
+        }else if(self.snake.parts.front().unwrap().x < 0) {
+            self.snake.parts.front_mut().unwrap().x = window_x as i32;
+        }
+
+        //y checks
+        if(self.snake.parts.front().unwrap().y > window_y as i32) {
+            self.snake.parts.front_mut().unwrap().y = 0;
+        }else if(self.snake.parts.front().unwrap().y < 0) {
+            self.snake.parts.front_mut().unwrap().y = window_y as i32;
+        }
         
         self.snake.move_snake();
+        self.snake.self_collide(&mut self.score, &mut self.high_score);
         Ok(())
     }
 
@@ -182,7 +227,9 @@ impl EventHandler for State {
         //make apple
         let apple_data: &mut Apple = &mut self.apple;
 
-        let text =  graphics::Text::new(format!("score: {}", self.score));
+        let score =  graphics::Text::new(format!("score: {}", self.score));
+        let highscore = graphics::Text::new(format!("highscore: {}", self.high_score));
+        let high_rect: mint::Point2<f32> = mint::Point2 {x: 180.0, y: 0.0};
 
 
         if let Eat::Hungry = self.eat {
@@ -205,8 +252,8 @@ impl EventHandler for State {
             }
         }
 
-        graphics::draw(ctx, &text, DrawParam::default());
-
+        graphics::draw(ctx, &score, DrawParam::default());
+        graphics::draw(ctx, &highscore, DrawParam::default().dest(high_rect));
 
         //snake
         self.snake.draw(ctx);
